@@ -6,6 +6,7 @@
   "dependencies": {
     "axios": "^0.18.0",
     "express": "^4.16.4",
+    "node-fetch": "^2.4.1",
     "socket.io": "^2.2.0"
   }
 }

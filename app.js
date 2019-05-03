@@ -88,7 +88,7 @@ function _sendAndSaveMessage(message, socket, userInfo, fromServer, testChatId) 
         createdAt: new Date(message.createdAt),
         chatId: testChatId || chatId
     };
-    axios.post(GET_USERS_BY_CHATROOM_ID, {
+    axios.post('http://localhost:3000/getusersbychatroomid', {
         chatId: testChatId,
     })
     .then(function (response) {
@@ -155,6 +155,6 @@ stdin.addListener('data', function(d) {
             userid: 11,
             username: 'test',
             headImg: 'http://cdn.duitang.com/uploads/item/201505/30/20150530201812_rPAkY.thumb.700_0.jpeg',
-        }, true /* send from server */, 9);
+        }, true /* send from server */, 1);
     }
 });
