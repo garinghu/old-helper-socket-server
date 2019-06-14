@@ -4,6 +4,7 @@ let axios = require('axios');
 
 const severProxy = 'http://localhost:3000';
 const GET_USERS_BY_CHATROOM_ID = `${severProxy}/getusersbychatroomid`;
+const ADD_GOOD_TO_MESSAGE_REQ = `${severProxy}/addgoodtomessagereq`;
 const GET_USERINFO_BY_ID = `${severProxy}/getuserinfobyid`;
 const GET_ALL_FRIEND_REQ = `${severProxy}/getallfriendreq`;
 
@@ -16,7 +17,7 @@ app.all('*', function(req, res, next) {
 });
 
 var server = require('http').createServer(app);
-var io = require('socket.io').listen(server);
+var io = require('socket.io')(server, { wsEngine: 'ws' });
 
 var users = {
     11: [],
@@ -28,17 +29,18 @@ var chatId = 1;
 
 
 app.use('/', express.static(__dirname+'/'));
-server.listen(8088);
+
 
 app.get('/test', function(req, res) {
     res.send('123123');
 });
 
-io.sockets.on('connection', (socket)=>{
+io.on('connection', (socket)=>{
     socket.on('userJoined', (info) => onUserJoined(info.userId, info.chatId, socket));
     socket.on('message', (message) => onMessageReceived(message.message, socket, message.userInfo, message.chatId));
     socket.on('userJoinedAllRoom', (userid) => onUserJoinedAllRoom(userid, socket));
     socket.on('addFriends', (info) => onAddFriends(info, socket));
+    socket.on('addMessageGoods', (info) => onAddMessageGoods(info, socket));
     // 轮询查看同意的好友申请
     // var getFriendReqInterval = setInterval(() => {
     //     var emitter = socket.broadcast;
@@ -53,9 +55,29 @@ io.sockets.on('connection', (socket)=>{
     // }, 10000)
 })
 
+setInterval(() => {
+    var emitter = io;
+    emitter.emit('test');
+}, 500)
+
 function onAddFriends(info, socket, fromServer) {
     var emitter = fromServer ? io : socket.broadcast;
     emitter.emit('addFriends', { info });
+}
+
+function onAddMessageGoods(info, socket, fromServer) {
+    var emitter = fromServer ? io : socket.broadcast;
+    const {userid, messageId, whom} = info
+    emitter.emit('getMessageGoods', {userid, messageId, whom});
+    axios.post(ADD_GOOD_TO_MESSAGE_REQ, {
+        userid, messageId, whom
+    })
+    .then(function (response) {
+        console.log('onAddMessageGoods', response.data);
+    })
+    .catch(function (error) {
+        console.log(error);
+    });
 }
 
 function onUserJoinedAllRoom(userid, socket) {
@@ -63,7 +85,11 @@ function onUserJoinedAllRoom(userid, socket) {
 }
 
 function onUserJoined(userId, inchatId, socket) {
+    console.log('userJoined');
     try {
+        if(!users[userId]) {
+            users[userId] = [];
+        }
         users[userId].push(inchatId);
         socket.join(inchatId);
         users[socket.id] = userId;
@@ -78,6 +104,7 @@ function _sendExistingMessages(socket) {
 
 function onMessageReceived(message, senderSocket, userInfo, chatId) {
     // var userId = users[senderSocket.id];
+    console.log('onMessageReceived');
     _sendAndSaveMessage(message, senderSocket, userInfo, null, chatId);
 }
 
@@ -88,7 +115,7 @@ function _sendAndSaveMessage(message, socket, userInfo, fromServer, testChatId) 
         createdAt: new Date(message.createdAt),
         chatId: testChatId || chatId
     };
-    axios.post('http://localhost:3000/getusersbychatroomid', {
+    axios.post(GET_USERS_BY_CHATROOM_ID, {
         chatId: testChatId,
     })
     .then(function (response) {
@@ -97,7 +124,7 @@ function _sendAndSaveMessage(message, socket, userInfo, fromServer, testChatId) 
         usersArr.splice(usersArr.indexOf(userId + ''), 1);
         const withWhom = usersArr.join('');
         var emitter = fromServer ? io : socket.broadcast;
-        if(!users[withWhom].includes(testChatId)) {
+        if(!users[withWhom] || !users[withWhom].includes(testChatId)) {
             const { userid, username, headImg } = userInfo;
             emitter.emit('notInRoomTip', {
                 userid,
@@ -146,11 +173,12 @@ stdin.addListener('data', function(d) {
             text: '聊聊人生',
             date: new Date(),
         }, null, true)
-    }else {
+    } else {
         _sendAndSaveMessage({
             text: d.toString().trim(),
             createdAt: new Date(),
-            user: { _id: 11 }
+            user: { _id: 11 },
+            _id: `${new Date()}`
         }, null /* no socket */, {
             userid: 11,
             username: 'test',
@@ -158,3 +186,5 @@ stdin.addListener('data', function(d) {
         }, true /* send from server */, 1);
     }
 });
+
+server.listen(8088);
